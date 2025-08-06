@@ -1,32 +1,45 @@
-name: Deploy Static Website to EC2
+name: Build and Deploy Docker App to EC2
 
 on:
   push:
     branches:
-      - main  # Change this if you're using a different branch
+      - main  # or your default branch
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up SSH key
+      - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Ensure /var/www/html exists on EC2
+      - name: Copy project files to EC2
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
-          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
-          "sudo mkdir -p /var/www/html && sudo chown -R \$USER:\$USER /var/www/html"
+          rsync -avz --delete -e "ssh -i ~/.ssh/id_rsa" ./ \
+          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/app
 
-      - name: Deploy static site to EC2 via rsync
+      - name: Deploy on EC2 with Docker
         run: |
-          rsync -avz --delete ./ \
-          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/var/www/html/
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            cd ~/app
+
+            # Stop and remove the old container (optional)
+            docker stop ${{ secrets.APP_NAME }} || true
+            docker rm ${{ secrets.APP_NAME }} || true
+
+            # Remove old image (optional)
+            docker rmi ${{ secrets.APP_NAME }} || true
+
+            # Build and run the Docker container
+            docker build -t ${{ secrets.APP_NAME }} .
+
+            # Run the container (adjust ports as needed)
+            docker run -d --name ${{ secrets.APP_NAME }} -p 80:80 ${{ secrets.APP_NAME }}
+          EOF
