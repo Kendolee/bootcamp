@@ -41,5 +41,5 @@ jobs:
             docker build -t ${{ secrets.APP_NAME }} .
 
             # Run the container (adjust ports as needed)
-            docker run -d --name ${{ secrets.APP_NAME }} -p 80:8077 ${{ secrets.APP_NAME }}
+            docker run -d --name ${{ secrets.APP_NAME }} -p 8077:80 ${{ secrets.APP_NAME }}
           EOF
